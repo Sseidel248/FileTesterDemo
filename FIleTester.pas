@@ -1,0 +1,158 @@
+unit FIleTester;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.StdCtrls, Vcl.ExtCtrls;
+
+type
+  TForm1 = class(TForm)
+    Edit1: TEdit;
+    Label1: TLabel;
+    Panel1: TPanel;
+    Label2: TLabel;
+    Edit2: TEdit;
+    Button1: TButton;
+    Label3: TLabel;
+    Edit3: TEdit;
+    Button2: TButton;
+    procedure Button1Click(Sender: TObject);
+    procedure FormShow(Sender: TObject);
+    procedure Button2Click(Sender: TObject);
+  private
+    { Private-Deklarationen }
+  public
+    { Public-Deklarationen }
+  end;
+
+var
+  Form1: TForm1;
+
+implementation
+
+{$R *.dfm}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+function GetFileTimes(const FileName: string; var Created: TDateTime;
+var Accessed: TDateTime; var Modified: TDateTime): Boolean;
+var
+  h: THandle;
+  Info1, Info2, Info3: TFileTime;
+  SysTimeStruct: SYSTEMTIME;
+  TimeZoneInfo: TTimeZoneInformation;
+  Bias: Double;
+begin
+  Result := False;
+  Bias := 0;
+  h := FileOpen(FileName, fmOpenRead or fmShareDenyNone);
+  if h > 0 then
+  begin
+    try
+      if GetTimeZoneInformation(TimeZoneInfo) <> $FFFFFFFF then
+        Bias := TimeZoneInfo.Bias / 1440; // 60x24
+      GetFileTime(h, @Info1, @Info2, @Info3);
+      if FileTimeToSystemTime(Info1, SysTimeStruct) then
+        Created := SystemTimeToDateTime(SysTimeStruct) - Bias;
+      if FileTimeToSystemTime(Info2, SysTimeStruct) then
+        Accessed := SystemTimeToDateTime(SysTimeStruct) - Bias;
+      if FileTimeToSystemTime(Info3, SysTimeStruct) then
+        Modified := SystemTimeToDateTime(SysTimeStruct) - Bias;
+      Result := True;
+    finally
+      FileClose(h);
+    end;
+  end;
+end;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+function IsFileOpen(const FileName: string): Boolean;
+var Stream: TFileStream;
+begin
+  Result := false;
+  if not FileExists(FileName) then exit;
+  try
+    Stream := TFileStream.Create(FileName,fmOpenRead{ or fmShareExclusive});
+  except
+    Result := true;
+    exit;
+  end;
+  Stream.Free;
+end;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+function IsFileInUse(const fName: TFileName): Boolean;
+var
+  HFileRes: HFILE;
+begin
+  Result := False;
+  HFileRes := CreateFile(PChar(fName),
+                         GENERIC_READ or GENERIC_WRITE,
+                         0,
+                         nil,
+                         OPEN_EXISTING,
+                         FILE_ATTRIBUTE_NORMAL,
+                         0);
+  Result := (HFileRes = INVALID_HANDLE_VALUE);
+  if not Result then
+    CloseHandle(HFileRes);
+end;
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+procedure TForm1.Button1Click(Sender: TObject);
+var
+FileNameOld, FileNameNew : String;
+CreatedOld, CreatedNew: TDateTime;
+AccessedOld, AccessedNew: TDateTime;
+ModifiedOld, ModifiedNew: TDateTime;
+begin
+  FileNameOld := Edit1.Text;
+  FileNameNew := Edit2.Text;
+
+  GetFileTimes(FileNameOld, CreatedOld, AccessedOld, ModifiedOld);
+  GetFileTimes(FileNameNew, CreatedNew, AccessedNew, ModifiedNew);
+
+  ShowMessage('Created old: ' + DateTimeToStr(CreatedOld) + sLineBreak
+             +'Created new: ' + DateTimeToStr(CreatedNew) + sLineBreak + sLineBreak
+             +'Last Accessed: old: ' + DateTimeToStr(AccessedOld) + sLineBreak
+             +'Last Accessed: new: ' + DateTimeToStr(AccessedNew) + sLineBreak + sLineBreak
+             +'Last Modified old: ' + DateTimeToStr(ModifiedOld) + sLineBreak
+             +'Last Modified new: ' + DateTimeToStr(ModifiedNew));
+
+end;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+procedure TForm1.Button2Click(Sender: TObject);
+var
+FileName : String;
+begin
+  FileName := Edit3.Text;
+
+  //!!! wenn eine Datei im Normalen Editor geöffnet ist dann wird diese NICHT als geöffnet erkannt
+  //Beide Vairanten funktionieren
+  //Variante 1
+  if IsFileOpen(Filename) then
+    ShowMessage('Datei: ' + sLineBreak + FileName + sLineBreak + 'wird bereits verwendet!')
+  else
+    ShowMessage('Datei: ' + sLineBreak + FileName + sLineBreak + 'wird gerade nicht verwendet.');
+  //Variante 2
+//  if IsFileInUse(Filename) then
+//    ShowMessage('Datei: ' + sLineBreak + FileName + sLineBreak + 'wird bereits verwendet!')
+//  else
+//    ShowMessage('Datei: ' + sLineBreak + FileName + sLineBreak + 'wird gerade nicht verwendet.');
+end;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+procedure TForm1.FormShow(Sender: TObject);
+begin
+  Edit1.Text := 'D:\Delphi embarcadero\FileTesterDemo\Datei alt\alt.txt';
+  Edit2.Text := 'D:\Delphi embarcadero\FileTesterDemo\Datei neu\alt.txt';
+  Edit3.Text := 'D:\Delphi embarcadero\FileTesterDemo\Datei für Zugriff\Zugriff.txt';
+end;
+
+end.
